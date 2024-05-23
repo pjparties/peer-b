@@ -51,7 +51,7 @@ io.on("connection", async (socket) => {
                 return s;
             }
         });
-        console.log(searching.length, "searching")
+        // console.log(searching.length, "searching")
         let i = 0;
         while (i < searching.length) {
             const peer = searching[i];
@@ -80,11 +80,18 @@ io.on("connection", async (socket) => {
     socket.on("newMessageToServer", (msg) => {
         // get room
         const roomName = [...socket.rooms][1];
+        // console.log("new message", msg);
+        // console.log("room", roomName);
         io.of("/").to(roomName).emit("newMessageToClient", { id: socket.id, msg });
     });
 
+    // TODO: roomname split undefined error
     socket.on("typing", (msg) => {
         const roomName = [...socket.rooms][1];
+        if (!roomName) {
+            // console.log("no room found");
+            return;
+        }
         const ids = roomName.split("#");
         const peerId = ids[0] === socket.id ? ids[1] : ids[0];
         const peer = notAvailable.find((user) => user.id === peerId);

@@ -1,145 +1,171 @@
 import express from "express";
-import cors from "cors";    
+import cors from "cors";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import dotenv from "dotenv";
+
+// Configuration
 dotenv.config({ path: ".env" });
+const PORT = process.env.PORT || 8000;
+const FRONTEND_URL = 'http://localhost:3000';
 
-const app = express();
-app.use(
-    cors({
-        origin: 'http://localhost:3000',
-        credentials: true,
-    })
-);
-app.use(
-    express.json({
-        limit: "50kb",
-    })
-);
-
-
-app.get("/", (req, res) => {
-    res.send("Hello World!");
-});
-
+// Express app setup
+const app = setupExpressApp();
 const httpServer = createServer(app);
-const io = new Server(httpServer, {
-    cors: {
-        origin: 'http://localhost:3000',
-        methods: ['GET', 'POST'],
-    },
-});
+const io = setupSocketServer(httpServer);
 
-let sockets = []; // list of all connected sockets
-let searching = []; // list of sockets that are searching for a chat (in queue)
-let notAvailable = []; // list of sockets that are already chatting
+// Socket management
+let sockets = [];
+let searching = [];
+let notAvailable = [];
 
-io.on("connection", async (socket) => {
-    // console.log("a user connected", socket.id);
-    sockets.push(socket);
-    // console.log(sockets.length, " total sockets");
-    const allSockets = await io.fetchSockets();
-    io.emit("numberOfOnline", allSockets.length);
+// Start server
+httpServer.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
 
-    socket.on("start", (id) => {
-        sockets = sockets.filter((s) => {
-            if (s.id === id) {
-                searching.push(s);
-                return;
-            } else {
-                return s;
-            }
-        });
-        // console.log(searching.length, "searching")
-        let i = 0;
-        while (i < searching.length) {
-            const peer = searching[i];
-            if (peer.id !== id) {
-                searching = searching.filter((s) => s.id !== peer.id);
-                searching = searching.filter((s) => s.id !== id);
-                notAvailable.push(socket, peer);
-                const socketRoomToLeave = [...socket.rooms][1];
-                const peerRoomToLeave = [...peer.rooms][1];
-                socket.leave(socketRoomToLeave);
-                peer.leave(peerRoomToLeave);
-                const roomName = `${id}#${peer.id}`;
-                socket.join(roomName);
-                peer.join(roomName);
-                io.of("/")
-                    .to(roomName)
-                    .emit("chatStart", "You are now chatting with a random stranger");
-                    // console.log("chat started betweem", id, "and", peer.id, "in room", roomName);     
-                break;
-            }
-            socket.emit("searching", "Searching...");
-            i++;
-        }
-    });
+// Setup functions
+function setupExpressApp() {
+  const app = express();
+  app.use(cors({ origin: FRONTEND_URL, credentials: true }));
+  app.use(express.json({ limit: "50kb" }));
+  app.get("/", (req, res) => res.send("Hello World!"));
+  return app;
+}
 
-    socket.on("newMessageToServer", (msg) => {
-        // get room
-        const roomName = [...socket.rooms][1];
-        // console.log("new message", msg);
-        // console.log("room", roomName);
-        io.of("/").to(roomName).emit("newMessageToClient", { id: socket.id, msg });
-    });
+function setupSocketServer(httpServer) {
+  const io = new Server(httpServer, {
+    cors: { origin: FRONTEND_URL, methods: ['GET', 'POST'] },
+  });
+  io.on("connection", handleSocketConnection);
+  return io;
+}
 
-    // TODO: roomname split undefined error
-    socket.on("typing", (msg) => {
-        const roomName = [...socket.rooms][1];
-        if (!roomName) {
-            // console.log("no room found");
-            return;
-        }
-        const ids = roomName.split("#");
-        const peerId = ids[0] === socket.id ? ids[1] : ids[0];
-        const peer = notAvailable.find((user) => user.id === peerId);
-        peer.emit("strangerIsTyping", msg);
-    });
+// Event handlers
+async function handleSocketConnection(socket) {
+  sockets.push(socket);
+  updateOnlineCount();
 
-    socket.on("doneTyping", () => {
-        const roomName = [...socket.rooms][1];
-        const ids = roomName.split("#");
-        const peerId = ids[0] === socket.id ? ids[1] : ids[0];
-        const peer = notAvailable.find((user) => user.id === peerId);
-        peer.emit("strangerIsDoneTyping");
-    });
+  socket.on("start", (id) => handleStart(socket, id));
+  socket.on("newMessageToServer", (msg) => handleNewMessage(socket, msg));
+  socket.on("typing", (msg) => handleTyping(socket, msg));
+  socket.on("doneTyping", () => handleDoneTyping(socket));
+  socket.on("stop", () => handleStop(socket));
+  socket.on("disconnecting", () => handleDisconnecting(socket));
+  socket.on("disconnect", updateOnlineCount);
+}
 
-    socket.on("stop", () => {
-        const roomName = [...socket.rooms][1];
-        const ids = roomName.split("#");
-        const peerId = ids[0] === socket.id ? ids[1] : ids[0];
-        const peer = notAvailable.find((user) => user.id === peerId);
-        peer.leave(roomName);
-        socket.leave(roomName);
-        peer.emit("strangerDisconnected", "Stranger has disconnected");
-        socket.emit("endChat", "You have disconnected");
-        notAvailable = notAvailable.filter((user) => user.id !== socket.id);
-        notAvailable = notAvailable.filter((user) => user.id !== peer.id);
-        sockets.push(socket, peer);
-    });
+function handleStart(socket, id) {
+  moveSocketToSearching(socket, id);
+  tryMatchSockets(socket, id);
+}
 
-    socket.on("disconnecting", async () => {
-        const roomName = [...socket.rooms][1];
-        if (roomName) {
-            io.of("/").to(roomName).emit("goodBye", "Stranger has disconnected");
-            const ids = roomName.split("#");
-            const peerId = ids[0] === socket.id ? ids[1] : ids[0];
-            const peer = notAvailable.find((user) => user.id === peerId);
-            peer.leave(roomName);
-            notAvailable = notAvailable.filter((user) => user.id !== peerId);
-            sockets.push(peer);
-        }
-        sockets = sockets.filter((user) => user.id !== socket.id);
-        searching = searching.filter((user) => user.id !== socket.id);
-        notAvailable = notAvailable.filter((user) => user.id !== socket.id);
-    });
+function handleNewMessage(socket, msg) {
+  const roomName: string = getRoomName(socket);
+  if (roomName) {
+    io.of("/").to(roomName).emit("newMessageToClient", { id: socket.id, msg });
+  }
+}
 
-    socket.on("disconnect", async () => {
-        const allSockets = await io.fetchSockets();
-        io.emit("numberOfOnline", allSockets.length);
-    });
-});
+function handleTyping(socket, msg) {
+  const roomName = getRoomName(socket);
+  if (!roomName) return;
+  const peer = getPeer(socket, roomName);
+  if (peer) {
+    peer.emit("strangerIsTyping", msg);
+  }
+}
 
-httpServer.listen(8000, () => console.log('Server is running on port 8000'));
+function handleDoneTyping(socket) {
+  const roomName = getRoomName(socket);
+  if (!roomName) return;
+  const peer = getPeer(socket, roomName);
+  if (peer) {
+    peer.emit("strangerIsDoneTyping");
+  }
+}
+
+function handleStop(socket) {
+  const roomName = getRoomName(socket);
+  if (!roomName) return;
+  const peer = getPeer(socket, roomName);
+  if (peer) {
+    disconnectChat(socket, peer, roomName);
+  } else {
+    socket.emit("endChat", "You have disconnected");
+    removeSocket(socket);
+  }
+}
+
+function handleDisconnecting(socket) {
+  const roomName = getRoomName(socket);
+  if (roomName) {
+    io.of("/").to(roomName).emit("goodBye", "Stranger has disconnected");
+    const peer = getPeer(socket, roomName);
+    if (peer) {
+      disconnectChat(socket, peer, roomName);
+    }
+  }
+  removeSocket(socket);
+}
+
+// Helper functions
+async function updateOnlineCount() {
+  const allSockets = await io.fetchSockets();
+  io.emit("numberOfOnline", allSockets.length);
+}
+
+function moveSocketToSearching(socket, id) {
+  sockets = sockets.filter(s => s.id !== id);
+  searching.push(socket);
+}
+
+function tryMatchSockets(socket, id) {
+  for (let i = 0; i < searching.length; i++) {
+    const peer = searching[i];
+    if (peer.id !== id) {
+      matchSockets(socket, peer, id);
+      return;
+    }
+  }
+  socket.emit("searching", "Searching...");
+}
+
+function matchSockets(socket, peer, id) {
+  searching = searching.filter(s => s.id !== peer.id && s.id !== id);
+  notAvailable.push(socket, peer);
+  const roomName = `${id}#${peer.id}`;
+  socket.leave([...socket.rooms][1]);
+  peer.leave([...peer.rooms][1]);
+  socket.join(roomName);
+  peer.join(roomName);
+  io.of("/").to(roomName).emit("chatStart", "You are now chatting with a random stranger");
+}
+
+function getRoomName(socket): string {
+  const rooms = Array.from(socket.rooms);
+  return rooms.length > 1 ? rooms[1] as string : null;
+}
+
+function getPeer(socket, roomName) {
+  if (!roomName) {
+    console.log("No room found for socket:", socket.id);
+    return null;
+  }
+  const [id1, id2] = roomName.split("#");
+  const peerId = id1 === socket.id ? id2 : id1;
+  return notAvailable.find(user => user.id === peerId);
+}
+
+function disconnectChat(socket, peer, roomName) {
+  peer.leave(roomName);
+  socket.leave(roomName);
+  peer.emit("strangerDisconnected", "Stranger has disconnected");
+  socket.emit("endChat", "You have disconnected");
+  notAvailable = notAvailable.filter(user => user.id !== socket.id && user.id !== peer.id);
+  sockets.push(socket, peer);
+}
+
+function removeSocket(socket) {
+  sockets = sockets.filter(user => user.id !== socket.id);
+  searching = searching.filter(user => user.id !== socket.id);
+  notAvailable = notAvailable.filter(user => user.id !== socket.id);
+}

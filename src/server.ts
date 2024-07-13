@@ -1,38 +1,38 @@
-import express from "express";
+import express, { Express, Request, Response } from "express";
 import cors from "cors";
-import { createServer } from "http";
-import { Server } from "socket.io";
+import { createServer, Server as HttpServer } from "http";
+import { Server as SocketIOServer, Socket } from "socket.io";
 import dotenv from "dotenv";
 
 // Configuration
 dotenv.config({ path: ".env" });
-const PORT = process.env.PORT || 8000;
-const FRONTEND_URL = 'http://localhost:3000';
+const PORT: number = parseInt(process.env.PORT || "8000", 10);
+const FRONTEND_URL: string = 'http://localhost:3000';
 
 // Express app setup
-const app = setupExpressApp();
-const httpServer = createServer(app);
-const io = setupSocketServer(httpServer);
+const app: Express = setupExpressApp();
+const httpServer: HttpServer = createServer(app);
+const io: SocketIOServer = setupSocketServer(httpServer);
 
 // Socket management
-let sockets = [];
-let searching = [];
-let notAvailable = [];
+let sockets: Socket[] = [];
+let searching: Socket[] = [];
+let notAvailable: Socket[] = [];
 
 // Start server
 httpServer.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
 
 // Setup functions
-function setupExpressApp() {
-  const app = express();
+function setupExpressApp(): Express {
+  const app: Express = express();
   app.use(cors({ origin: FRONTEND_URL, credentials: true }));
   app.use(express.json({ limit: "50kb" }));
-  app.get("/", (req, res) => res.send("Hello World!"));
+  app.get("/", (req: Request, res: Response) => res.send("Hello World!"));
   return app;
 }
 
-function setupSocketServer(httpServer) {
-  const io = new Server(httpServer, {
+function setupSocketServer(httpServer: HttpServer): SocketIOServer {
+  const io: SocketIOServer = new SocketIOServer(httpServer, {
     cors: { origin: FRONTEND_URL, methods: ['GET', 'POST'] },
   });
   io.on("connection", handleSocketConnection);
@@ -40,53 +40,53 @@ function setupSocketServer(httpServer) {
 }
 
 // Event handlers
-async function handleSocketConnection(socket) {
+async function handleSocketConnection(socket: Socket): Promise<void> {
   sockets.push(socket);
-  updateOnlineCount();
+  await updateOnlineCount();
 
-  socket.on("start", (id) => handleStart(socket, id));
-  socket.on("newMessageToServer", (msg) => handleNewMessage(socket, msg));
-  socket.on("typing", (msg) => handleTyping(socket, msg));
+  socket.on("start", (id: string) => handleStart(socket, id));
+  socket.on("newMessageToServer", (msg: string) => handleNewMessage(socket, msg));
+  socket.on("typing", (msg: string) => handleTyping(socket, msg));
   socket.on("doneTyping", () => handleDoneTyping(socket));
   socket.on("stop", () => handleStop(socket));
   socket.on("disconnecting", () => handleDisconnecting(socket));
   socket.on("disconnect", updateOnlineCount);
 }
 
-function handleStart(socket, id) {
+function handleStart(socket: Socket, id: string): void {
   moveSocketToSearching(socket, id);
   tryMatchSockets(socket, id);
 }
 
-function handleNewMessage(socket, msg) {
-  const roomName: string = getRoomName(socket);
+function handleNewMessage(socket: Socket, msg: string): void {
+  const roomName: string | null = getRoomName(socket);
   if (roomName) {
     io.of("/").to(roomName).emit("newMessageToClient", { id: socket.id, msg });
   }
 }
 
-function handleTyping(socket, msg) {
-  const roomName = getRoomName(socket);
+function handleTyping(socket: Socket, msg: string): void {
+  const roomName: string | null = getRoomName(socket);
   if (!roomName) return;
-  const peer = getPeer(socket, roomName);
+  const peer: Socket | undefined = getPeer(socket, roomName);
   if (peer) {
     peer.emit("strangerIsTyping", msg);
   }
 }
 
-function handleDoneTyping(socket) {
-  const roomName = getRoomName(socket);
+function handleDoneTyping(socket: Socket): void {
+  const roomName: string | null = getRoomName(socket);
   if (!roomName) return;
-  const peer = getPeer(socket, roomName);
+  const peer: Socket | undefined = getPeer(socket, roomName);
   if (peer) {
     peer.emit("strangerIsDoneTyping");
   }
 }
 
-function handleStop(socket) {
-  const roomName = getRoomName(socket);
+function handleStop(socket: Socket): void {
+  const roomName: string | null = getRoomName(socket);
   if (!roomName) return;
-  const peer = getPeer(socket, roomName);
+  const peer: Socket | undefined = getPeer(socket, roomName);
   if (peer) {
     disconnectChat(socket, peer, roomName);
   } else {
@@ -95,11 +95,11 @@ function handleStop(socket) {
   }
 }
 
-function handleDisconnecting(socket) {
-  const roomName = getRoomName(socket);
+function handleDisconnecting(socket: Socket): void {
+  const roomName: string | null = getRoomName(socket);
   if (roomName) {
     io.of("/").to(roomName).emit("goodBye", "Stranger has disconnected");
-    const peer = getPeer(socket, roomName);
+    const peer: Socket | undefined = getPeer(socket, roomName);
     if (peer) {
       disconnectChat(socket, peer, roomName);
     }
@@ -108,19 +108,19 @@ function handleDisconnecting(socket) {
 }
 
 // Helper functions
-async function updateOnlineCount() {
-  const allSockets = await io.fetchSockets();
+async function updateOnlineCount(): Promise<void> {
+  const allSockets: Socket[] = Array.from(io.sockets.sockets.values());
   io.emit("numberOfOnline", allSockets.length);
 }
 
-function moveSocketToSearching(socket, id) {
+function moveSocketToSearching(socket: Socket, id: string): void {
   sockets = sockets.filter(s => s.id !== id);
   searching.push(socket);
 }
 
-function tryMatchSockets(socket, id) {
+function tryMatchSockets(socket: Socket, id: string): void {
   for (let i = 0; i < searching.length; i++) {
-    const peer = searching[i];
+    const peer: Socket = searching[i];
     if (peer.id !== id) {
       matchSockets(socket, peer, id);
       return;
@@ -129,10 +129,10 @@ function tryMatchSockets(socket, id) {
   socket.emit("searching", "Searching...");
 }
 
-function matchSockets(socket, peer, id) {
+function matchSockets(socket: Socket, peer: Socket, id: string): void {
   searching = searching.filter(s => s.id !== peer.id && s.id !== id);
   notAvailable.push(socket, peer);
-  const roomName = `${id}#${peer.id}`;
+  const roomName: string = `${id}#${peer.id}`;
   socket.leave([...socket.rooms][1]);
   peer.leave([...peer.rooms][1]);
   socket.join(roomName);
@@ -140,22 +140,22 @@ function matchSockets(socket, peer, id) {
   io.of("/").to(roomName).emit("chatStart", "You are now chatting with a random stranger");
 }
 
-function getRoomName(socket): string {
-  const rooms = Array.from(socket.rooms);
-  return rooms.length > 1 ? rooms[1] as string : null;
+function getRoomName(socket: Socket): string | null {
+  const rooms: string[] = Array.from(socket.rooms);
+  return rooms.length > 1 ? rooms[1] : null;
 }
 
-function getPeer(socket, roomName) {
+function getPeer(socket: Socket, roomName: string): Socket | undefined {
   if (!roomName) {
     console.log("No room found for socket:", socket.id);
-    return null;
+    return undefined;
   }
   const [id1, id2] = roomName.split("#");
-  const peerId = id1 === socket.id ? id2 : id1;
+  const peerId: string = id1 === socket.id ? id2 : id1;
   return notAvailable.find(user => user.id === peerId);
 }
 
-function disconnectChat(socket, peer, roomName) {
+function disconnectChat(socket: Socket, peer: Socket, roomName: string): void {
   peer.leave(roomName);
   socket.leave(roomName);
   peer.emit("strangerDisconnected", "Stranger has disconnected");
@@ -164,7 +164,7 @@ function disconnectChat(socket, peer, roomName) {
   sockets.push(socket, peer);
 }
 
-function removeSocket(socket) {
+function removeSocket(socket: Socket): void {
   sockets = sockets.filter(user => user.id !== socket.id);
   searching = searching.filter(user => user.id !== socket.id);
   notAvailable = notAvailable.filter(user => user.id !== socket.id);

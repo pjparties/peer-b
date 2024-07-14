@@ -6,7 +6,7 @@ import { Server as SocketIOServer } from "socket.io";
 import { CronJob } from 'cron';
 import { Config } from './config/Config';
 import { UserService } from './services/UserService';
-import { SocketManager } from './managers/socketManager';
+import { SocketManager } from './managers/SocketManager';
 
 async function startServer() {
   const app = express();

@@ -1,3 +1,4 @@
+import 'reflect-metadata';
 import express, { Express, Request, Response } from "express";
 import cors from "cors";
 import { createServer, Server as HttpServer } from "http";
@@ -7,7 +8,7 @@ import { Pool } from 'pg';
 import { CronJob } from 'cron';
 
 // Configuration
-dotenv.config({ path: ".env.development.local" });
+dotenv.config({ path: ".env" });
 const PORT: number = parseInt(process.env.PORT || "8000", 10);
 const FRONTEND_URL: string = 'http://localhost:3000';
 

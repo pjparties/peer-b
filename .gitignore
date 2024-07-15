@@ -83,7 +83,6 @@ web_modules/
 .cache
 .parcel-cache
 # place ca.crt in src as well as root
-ca.crt
 
 # Next.js build output
 .next

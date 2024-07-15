@@ -1,11 +1,16 @@
+import { readFileSync } from 'fs';
 import { Pool } from 'pg';
-import { Config } from '../config/Config';
 
 export class UserService {
   private pool: Pool;
 
-  constructor() {
-    this.pool = new Pool(Config.DB_CONFIG);
+  constructor(caCertPath: string) {
+    this.pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: {
+        ca: readFileSync(caCertPath).toString(),
+      }
+    });
   }
 
   async createUsersTable(): Promise<void> {

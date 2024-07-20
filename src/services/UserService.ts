@@ -1,14 +1,13 @@
-import { readFileSync } from 'fs';
 import { Pool } from 'pg';
 
 export class UserService {
   private pool: Pool;
 
-  constructor(caCertPath: string) {
+  constructor() {
     this.pool = new Pool({
       connectionString: process.env.DATABASE_URL,
       ssl: {
-        ca: readFileSync(caCertPath).toString(),
+        ca: process.env.CERTIFICATE
       }
     });
   }

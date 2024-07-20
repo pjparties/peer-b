@@ -7,7 +7,6 @@ import { CronJob } from 'cron';
 import { Config } from './config/Config';
 import { UserService } from './services/UserService';
 import { SocketManager } from './managers/SocketManager';
-import { resolve } from 'path';
 
 async function startServer() {
   const app = express();
@@ -20,7 +19,7 @@ async function startServer() {
     cors: { origin: Config.FRONTEND_URL, methods: ['GET', 'POST'] },
   });
 
-  const userService = new UserService(resolve(__dirname, './ca.crt'));
+  const userService = new UserService();
   await userService.createUsersTable();
 
   const socketManager = new SocketManager(io, userService);

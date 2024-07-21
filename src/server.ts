@@ -4,9 +4,9 @@ import cors from "cors";
 import { createServer } from "http";
 import { Server as SocketIOServer } from "socket.io";
 import { CronJob } from 'cron';
-import { Config } from './config/Config';
-import { UserService } from './services/UserService';
-import { SocketManager } from './managers/SocketManager';
+import { Config } from './config/Config.js';
+import { UserService } from './services/UserService.js';
+import { SocketManager } from './managers/SocketManager.js';
 
 async function startServer() {
   const app = express();

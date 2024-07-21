@@ -1,7 +1,8 @@
-import { Pool } from 'pg';
+import pg from "pg";
+const { Pool } = pg;
 
 export class UserService {
-  private pool: Pool;
+  private pool: pg.Pool;
 
   constructor() {
     this.pool = new Pool({

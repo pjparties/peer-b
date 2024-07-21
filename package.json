@@ -4,6 +4,7 @@
   "description": "TypeScript + Express API Server",
   "author": "",
   "license": "ISC",
+  "type": "module",
   "scripts": {
     "start": "npm run build && cross-env NODE_ENV=production node dist/server.js",
     "dev": "cross-env NODE_ENV=development nodemon",
@@ -30,7 +31,6 @@
     "@types/compression": "^1.7.2",
     "@types/cookie-parser": "^1.4.3",
     "@types/cors": "^2.8.17",
-    "@types/cron": "^2.4.0",
     "@types/express": "^4.17.21",
     "@types/node": "^17.0.45",
     "@types/pg": "^8.11.6",

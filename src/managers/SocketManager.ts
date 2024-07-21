@@ -1,5 +1,5 @@
 import { Server as SocketIOServer, Socket } from "socket.io";
-import { UserService } from "../services/UserService";
+import { UserService } from "../services/UserService.js";
 
 export class SocketManager {
   private io: SocketIOServer;
